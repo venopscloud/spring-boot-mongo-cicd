@@ -1,0 +1,61 @@
+pipeline {
+    agent any
+    stages {
+        stage('Checkout') {
+            steps {
+                git branch: 'feature', 
+                    credentialsId: '33e5e605-33c2-45d2-8c7d-4a94a80eb1ef', 
+                    url: 'https://github.com/KandlaguntaVenkataSivaNiranjanReddy/spring-boot-mongo-docker-kkfunda'
+            }
+        }
+        stage('Setup KubeConfig') {
+            steps {
+                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', 
+                                  credentialsId: 'aws-eks-cred']]) {
+                    script {
+                        sh """
+                        aws eks update-kubeconfig --region ap-south-1 --name EKS-Demo
+                        """
+                    }
+                }
+            }
+        }
+
+        stage('Install Helm') {
+            steps {
+                script {
+                    sh """
+                    # Install Helm if not already installed
+                    curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+                    """
+                }
+            }
+        }
+
+        stage('Deploy with Helm') {
+            steps {
+                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', 
+                                  credentialsId: 'aws-eks-cred']]) {
+                    script {
+                        // Simply deploy using the values defined in values.yaml
+                        sh """
+                        # Deploy the Helm chart from the 'mycharts' folder
+                        helm upgrade --install myapp ./mycharts -n test-ns
+                        """
+                    }
+                }
+            }
+        }
+
+        stage('Verify Pods') {
+            steps {
+                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', 
+                                  credentialsId: 'aws-eks-cred']]) {
+                    script {
+                        sh "kubectl get pods -n test-ns"
+                    }
+                }
+            }
+        }
+    }
+}
